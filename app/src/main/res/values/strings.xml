@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">DavveroTV Downloader</string>
+    <string name="log_attivit_e_link_al_video">Log attività e link al video</string>
+    <string name="url_da_scaricare">Url da scaricare</string>
+    <string name="start">Start</string>
+    <string name="copia_url">Copia URL</string>
+    <string name="url_della_pagina_con_il_video_da_scaricare">Url della pagina con il video da scaricare</string>
+</resources>
