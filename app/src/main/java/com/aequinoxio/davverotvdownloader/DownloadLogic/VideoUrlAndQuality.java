@@ -1,5 +1,7 @@
 package com.aequinoxio.davverotvdownloader.DownloadLogic;
 
+import java.lang.ref.WeakReference;
+
 public class VideoUrlAndQuality {
     String videoUrl;
     String quality;
