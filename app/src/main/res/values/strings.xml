@@ -5,4 +5,9 @@
     <string name="start">Start</string>
     <string name="copia_url">Copia URL</string>
     <string name="url_della_pagina_con_il_video_da_scaricare">Url della pagina con il video da scaricare</string>
+    <string name="Qualita_Video">Qualità video</string>
+    <string name="Scarica_Video">Scarica video</string>
+    <string name="HelpUrl">Es: https://www.davvero.tv/tgbyoblu24/videos/tg-byoblu24-26-febbraio-2021-edizione-19-00</string>
+    <string name="UrlEsempio">https://www.davvero.tv/tgbyoblu24/videos/tg-byoblu24-26-febbraio-2021-edizione-19-00</string>
+    <string name="VediEsempio">Url esempio</string>
 </resources>

@@ -16,6 +16,7 @@ public class ParseVideoPage {
     private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:86.0) Gecko/20100101 Firefox/86.0" ;
 
     final WorkerUpdateCallback workerUpdateCallback;
+    private static String Indent="\t\t\t";
 
     public ParseVideoPage(WorkerUpdateCallback workerUpdateCallback) {
         this.workerUpdateCallback = workerUpdateCallback;
@@ -23,18 +24,18 @@ public class ParseVideoPage {
 
     public VideoDetails start (String urlText){
         if(workerUpdateCallback!=null){
-            workerUpdateCallback.update(UpdateEvent.StartLoadingPage,"StartLoadingPage");
+            workerUpdateCallback.update(UpdateEvent.StartLoadingPage,"Start Loading Page");
         }
 
         String jsonPage = loadPage(urlText);
 
         if (jsonPage!=null) {
             if(workerUpdateCallback!=null){
-                workerUpdateCallback.update(UpdateEvent.FirstPageLoaded, "FirstPageLoaded");
+                workerUpdateCallback.update(UpdateEvent.FirstPageLoaded, Indent+"First Page Loaded");
             }
         }else {
             if(workerUpdateCallback!=null){
-                workerUpdateCallback.update(UpdateEvent.Error, "Error loading first page");
+                workerUpdateCallback.update(UpdateEvent.Error, "*** Error loading first page ***");
             }
             return null;
         }
@@ -43,11 +44,11 @@ public class ParseVideoPage {
 
         if (videoDetails!=null) {
             if(workerUpdateCallback!=null){
-                workerUpdateCallback.update(UpdateEvent.VideoDownloadCanStart, "VideoDownloadCanStart");
+                workerUpdateCallback.update(UpdateEvent.VideoDownloadCanStart, "\nVideo Download Can Start\n");
             }
         } else {
             if(workerUpdateCallback!=null) {
-                workerUpdateCallback.update(UpdateEvent.Error, "Error parsing page finding video url");
+                workerUpdateCallback.update(UpdateEvent.Error, "*** Error parsing page finding video url ***");
             }
             return null;
         }
@@ -72,7 +73,7 @@ public class ParseVideoPage {
 
         try {
             if(workerUpdateCallback!=null){
-                workerUpdateCallback.update(UpdateEvent.SecondPageLoading,"SecondPageLoading");
+                workerUpdateCallback.update(UpdateEvent.SecondPageLoading,Indent+"Second Page is Loading");
             }
 
             String secondPageContent = Jsoup.connect(secondPageUrl)
@@ -80,7 +81,7 @@ public class ParseVideoPage {
                     .ignoreContentType(true).get().text();
 
             if(workerUpdateCallback!=null){
-                workerUpdateCallback.update(UpdateEvent.SecondPageLoaded,"SecondPageLoaded");
+                workerUpdateCallback.update(UpdateEvent.SecondPageLoaded,Indent+"Second Page Loaded");
             }
 
             JsonReader jsonReader1 = Json.createReader(new StringReader(secondPageContent));
@@ -152,7 +153,7 @@ public class ParseVideoPage {
                     break;
                 }
             }
-        } catch (IOException e) {
+        } catch (IOException | NullPointerException e) {
             e.printStackTrace();
         }
         return retVal;

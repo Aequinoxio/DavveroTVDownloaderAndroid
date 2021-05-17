@@ -1,7 +1,6 @@
 package com.aequinoxio.davverotvdownloader;
 
 import androidx.annotation.NonNull;
-import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 
@@ -15,17 +14,14 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
-import android.graphics.Color;
-import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.AsyncTask;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
-import android.util.Log;
-import android.view.LayoutInflater;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.view.KeyEvent;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
@@ -43,14 +39,21 @@ import com.aequinoxio.davverotvdownloader.DownloadLogic.VideoUrlAndQuality;
 import com.aequinoxio.davverotvdownloader.DownloadLogic.WorkerUpdateCallback;
 import com.google.android.material.snackbar.Snackbar;
 
-import org.w3c.dom.Text;
-
-import java.net.MalformedURLException;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.FileWriter;
+import java.io.FilterOutputStream;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.net.URL;
-import java.sql.SQLOutput;
 import java.util.List;
+import java.util.Locale;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static com.google.android.material.snackbar.BaseTransientBottomBar.LENGTH_LONG;
 
@@ -61,7 +64,7 @@ public class MainActivity extends AppCompatActivity {
     private VideoDetailsParcelable videoDetailsParcelable;
     boolean spinnerInitialization = true;
     private long downloadManagerID;
-    private int PERMISSION_REQ_CODE;
+    private final int PERMISSION_REQ_CODE = 1234987; // Valore casuale per l'applicazione
     private boolean PERMISSION_WRITE_GRANTED;
     private BroadcastReceiver downloadReceiver;
     private TimerTask timerTask;
@@ -71,25 +74,19 @@ public class MainActivity extends AppCompatActivity {
     // Permission check
     // Thanx to: https://stackoverflow.com/a/40514787
     public boolean haveStoragePermission() {
-        if (Build.VERSION.SDK_INT >= 23) {
-            if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                    == PackageManager.PERMISSION_GRANTED) {
-                //Log.e("Permission error","You have permission");
-                PERMISSION_WRITE_GRANTED = true;
-                return PERMISSION_WRITE_GRANTED;
-            } else {
-
-                // Log.e("Permission error","You have asked for permission");
-                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, PERMISSION_REQ_CODE);
-                PERMISSION_WRITE_GRANTED = false; // TODO: FORSE è un errore
-                return PERMISSION_WRITE_GRANTED;
-
-            }
-        } else { //you dont need to worry about these stuff below api level 23
-            // Log.e("Permission error","You already have the permission");
+        if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                == PackageManager.PERMISSION_GRANTED) {
+            //Log.e("Permission error","You have permission");
             PERMISSION_WRITE_GRANTED = true;
-            return PERMISSION_WRITE_GRANTED;
+
+        } else {
+
+            // Log.e("Permission error","You have asked for permission");
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, PERMISSION_REQ_CODE);
+            PERMISSION_WRITE_GRANTED = false; // TODO: FORSE è un errore
+
         }
+        return PERMISSION_WRITE_GRANTED;
     }
 
     @Override
@@ -97,11 +94,7 @@ public class MainActivity extends AppCompatActivity {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == PERMISSION_REQ_CODE) {
             if (grantResults.length > 0) {
-                if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    PERMISSION_WRITE_GRANTED = true;
-                } else {
-                    PERMISSION_WRITE_GRANTED = false;
-                }
+                PERMISSION_WRITE_GRANTED = grantResults[0] == PackageManager.PERMISSION_GRANTED;
             }
         }
     }
@@ -123,20 +116,38 @@ public class MainActivity extends AppCompatActivity {
         }
 
         //// DEBUG
-        ((EditText) findViewById(R.id.editTextTextUrl)).setText("https://www.davvero.tv/tgbyoblu24/videos/tg-byoblu24-26-febbraio-2021-edizione-19-00");
+        //((EditText) findViewById(R.id.editTextTextUrl)).setText("https://www.davvero.tv/tgbyoblu24/videos/tg-byoblu24-26-febbraio-2021-edizione-19-00");
         ////
 
         Button button = findViewById(R.id.btnStart);
 
-        button.setOnClickListener((View.OnClickListener) v -> {
+        Button finalButton = button;
+        button.setOnClickListener(v -> {
+
+            String urlText = ((EditText)findViewById(R.id.editTextTextUrl)).getText().toString();
+
+            if (!httpUrlIsValid(urlText)){
+                Snackbar.make(this,v,"Immettere un'url valida", LENGTH_LONG).show();
+                return;
+            }
+
             ParserAsyncTask parserAsyncTask = new ParserAsyncTask();
             parserAsyncTask.execute();
-            ((ProgressBar) findViewById(R.id.progressBar)).setVisibility(View.VISIBLE);
-            ((ProgressBar) findViewById(R.id.progressBarCircular)).setVisibility(View.VISIBLE);
+            findViewById(R.id.progressBar).setVisibility(View.VISIBLE);
+            findViewById(R.id.progressBarCircular).setVisibility(View.VISIBLE);
             findViewById(R.id.btnCopy).setEnabled(false);
             findViewById(R.id.btnDownloadVideo).setEnabled(false);
-            button.setEnabled(false);
+
+
+            finalButton.setEnabled(false);
+            findViewById(R.id.btnEsempio).setEnabled(false);
+
             ((TextView) findViewById(R.id.txtLogView)).setText("");
+        });
+
+        button = findViewById(R.id.btnEsempio);
+        button.setOnClickListener(v -> {
+            ((EditText)findViewById(R.id.editTextTextUrl)).setText(getString(R.string.UrlEsempio));
         });
 
         Spinner spinner = findViewById(R.id.spinner);
@@ -162,6 +173,30 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        // Check url durante la digitazione
+        EditText editText = findViewById(R.id.editTextTextUrl);
+        editText.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                if (s.length()>0 && httpUrlIsValid(s.toString())){
+                    findViewById(R.id.btnStart).setEnabled(true);
+                } else{
+                    findViewById(R.id.btnStart).setEnabled(false);
+                }
+            }
+        });
+
+
         Button buttonCopy = findViewById(R.id.btnCopy);
         buttonCopy.setOnClickListener(v -> {
 
@@ -179,6 +214,7 @@ public class MainActivity extends AppCompatActivity {
 
         });
 
+
         Button buttonDownloadVideo = findViewById(R.id.btnDownloadVideo);
         buttonDownloadVideo.setOnClickListener(v -> {
             String videoUrl;
@@ -188,22 +224,14 @@ public class MainActivity extends AppCompatActivity {
             if (!PERMISSION_WRITE_GRANTED) {
                 return;
             }
-            // DEBUG
+
             // Check se non sono null
-//            if (!BuildConfig.DEBUG) {
-                if (spinner.getSelectedItem() == null) {
-                    return;
-                }
-                videoUrl = ((VideoUrlAndQuality) (spinner.getSelectedItem())).getVideoUrl();
-                videoQuality = ((VideoUrlAndQuality) (spinner.getSelectedItem())).getQuality();
-                videoTitle = videoDetailsParcelable.getTitle();
-//            } else {
-//                videoUrl = "https://open.tube/download/videos/013d5ceb-edf3-4cbc-9ff3-deca630ccf25-360.mp4";
-//                videoQuality = "258";
-//                videoTitle = "test";
-//            }
-//            System.out.println(videoUrl);
-//            ////////
+            if (spinner.getSelectedItem() == null) {
+                return;
+            }
+            videoUrl = ((VideoUrlAndQuality) (spinner.getSelectedItem())).getVideoUrl();
+            videoQuality = ((VideoUrlAndQuality) (spinner.getSelectedItem())).getQuality();
+            videoTitle = videoDetailsParcelable.getTitle();
 
             DownloadManager.Request request = new DownloadManager.Request(Uri.parse(videoUrl));
             request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
@@ -217,19 +245,32 @@ public class MainActivity extends AppCompatActivity {
 
             // Feedback utente.
             // TODO: provare a mostrare una dialog con lo stato di avanzamento
-            ((ProgressBar) findViewById(R.id.progressBarCircular)).setVisibility(View.VISIBLE);
+            findViewById(R.id.progressBarCircular).setVisibility(View.VISIBLE);
             findViewById(R.id.btnDownloadVideo).setEnabled(false);
 
-            ProgressBar progressBar =  findViewById(R.id.progressBar);
+            ProgressBar progressBar = findViewById(R.id.progressBar);
             progressBar.setVisibility(View.VISIBLE);
             progressBar.setMin(0);
             progressBar.setMax(100);
 
+            // Scrivo il file di ausilio .title con le informazioni sull'origine del video
+            try(BufferedWriter bw = new BufferedWriter(new FileWriter(
+                    new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)+"/"+videoTitle+".title")))
+            ){
+                bw.write("Titolo:");bw.write(videoTitle);bw.newLine();
+                bw.write("Url:");bw.write(videoDetailsParcelable.getMainUrl());bw.newLine();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+            // Avvio il download
             timer.cancel(); // Per sicurezza
             timer = new Timer();
             timerTask = new TimerTask() {
+                long latestPrintedDownload = 0;
                 final ProgressBar pb = findViewById(R.id.progressBar);
                 final TextView textViewLog=findViewById(R.id.txtLogView);
+
                 @Override
                 public void run() {
                     DownloadManager.Query query = new DownloadManager.Query();
@@ -240,13 +281,20 @@ public class MainActivity extends AppCompatActivity {
                         int bytes_downloaded = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));
                         int bytes_total = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
                         double progresso = 100.0F * ((bytes_downloaded * 1.0F) / (double) bytes_total);
-                        runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                pb.setProgress((int) progresso);
-                                textViewLog.append(String.format("Scaricati %d di %d bytes\n", bytes_downloaded, bytes_total));
+
+                        if (bytes_total<=0){
+                            pb.setIndeterminate(true);
+                        } else {
+                            pb.setIndeterminate(false);
+                            // Aggiorno solo se i bytes scaricati sono aumentati, evito il doppio aggiornamento
+                            if (latestPrintedDownload != bytes_downloaded) {
+                                latestPrintedDownload = bytes_downloaded;
+                                runOnUiThread(() -> {
+                                    pb.setProgress((int) progresso);
+                                    textViewLog.append(String.format(Locale.getDefault(),"Scaricati %d di %d bytes - %d %%\n", bytes_downloaded, bytes_total, (int) progresso));
+                                });
                             }
-                        });
+                        }
                     }
                 }
             };
@@ -260,6 +308,7 @@ public class MainActivity extends AppCompatActivity {
             public void onReceive(Context context, Intent intent) {
                 String action = intent.getAction();
 
+              //  System.out.println("*** action:"+action);
                 if (!DownloadManager.ACTION_DOWNLOAD_COMPLETE.equals(action)) {
                     return;
                 }
@@ -267,6 +316,8 @@ public class MainActivity extends AppCompatActivity {
                 if (intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, 0) != downloadManagerID) {
                     return;
                 }
+
+              //  System.out.println("*** action 2:"+action);
 
                 DownloadManager.Query query = new DownloadManager.Query();
                 query.setFilterById(downloadManagerID);
@@ -287,25 +338,36 @@ public class MainActivity extends AppCompatActivity {
                             //((TextView)findViewById(R.id.txtLogView)).append("Download in errore\n");
                     }
 
-                    timer.cancel();
                 } else {
                     messaggio = "Assumo che il download sia stato cancellato\n";
                 }
+                timer.cancel();
                 String finalMessaggio = messaggio;
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        ((TextView) findViewById(R.id.txtLogView)).append(finalMessaggio);
-                        ((ProgressBar) findViewById(R.id.progressBarCircular)).setVisibility(View.INVISIBLE);
-                        ((ProgressBar) findViewById(R.id.progressBar)).setVisibility(View.INVISIBLE);
-                        findViewById(R.id.btnDownloadVideo).setEnabled(true);
-                    }
+                runOnUiThread(() -> {
+                 //   System.out.println("*** on runuithread:");
+                    ((TextView) findViewById(R.id.txtLogView)).append(finalMessaggio);
+                    findViewById(R.id.progressBarCircular).setVisibility(View.INVISIBLE);
+                    findViewById(R.id.progressBar).setVisibility(View.INVISIBLE);
+                    findViewById(R.id.btnDownloadVideo).setEnabled(true);
                 });
             }
         };
 
         registerReceiver(downloadReceiver, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
 
+    }
+
+    // See: https://www.oracle.com/webfolder/technetwork/tutorials/obe/java/httpThreadLink/HttpClient.html
+    // TODO: migliorare la regexp
+    private boolean httpUrlIsValid(String urlText) {
+        String urlRegex = "^(http|https)://[-a-zA-Z0-9+&@#/%?=~_|,!:.;]*[-a-zA-Z0-9+@#/%=&_|]";
+        Pattern pattern = Pattern.compile(urlRegex);
+        Matcher m = pattern.matcher(urlText);
+        if (m.matches()) {
+            return true;
+        } else {
+            return false;
+        }
     }
 
     @Override
@@ -316,23 +378,28 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void populateTree(VideoDetailsParcelable videoDetails) {
-        if (videoDetails == null) {
-            return;
-        }
         Spinner spinner = findViewById(R.id.spinner);
         ArrayAdapter<VideoUrlAndQuality> arrayAdapter = new ArrayAdapter<>(getBaseContext(), android.R.layout.simple_list_item_1);
 
+        if (videoDetails == null) {
+            resetUI();
+            spinner.setAdapter(arrayAdapter); // Azzero il selettore della qualità
+            return;
+        }
+
+        // Aggiorno il selettore della qualità
         for (VideoUrlAndQuality videoUrlAndQuality : videoDetails.getVideoUrlQualityList()) {
             arrayAdapter.add(videoUrlAndQuality);
         }
 
         spinner.setAdapter(arrayAdapter);
 
-        ((ProgressBar) findViewById(R.id.progressBar)).setVisibility(View.INVISIBLE);
-        ((ProgressBar) findViewById(R.id.progressBarCircular)).setVisibility(View.INVISIBLE);
+        findViewById(R.id.progressBar).setVisibility(View.INVISIBLE);
+        findViewById(R.id.progressBarCircular).setVisibility(View.INVISIBLE);
         findViewById(R.id.btnCopy).setEnabled(true);
         findViewById(R.id.btnDownloadVideo).setEnabled(true);
         findViewById(R.id.btnStart).setEnabled(true);
+        findViewById(R.id.btnEsempio).setEnabled(true);
 
         videoDetailsParcelable = videoDetails;
     }
@@ -420,5 +487,15 @@ public class MainActivity extends AppCompatActivity {
             super.onPostExecute(videoDetails);
             populateTree(videoDetails);
         }
+    }
+
+    private void resetUI() {
+        findViewById(R.id.progressBarCircular).setVisibility(View.INVISIBLE);
+        findViewById(R.id.btnCopy).setEnabled(false);
+        findViewById(R.id.btnDownloadVideo).setEnabled(false);
+
+        findViewById(R.id.btnStart).setEnabled(true);
+        findViewById(R.id.btnEsempio).setEnabled(true);
+
     }
 }
