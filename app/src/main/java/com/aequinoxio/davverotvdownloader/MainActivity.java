@@ -16,6 +16,7 @@ import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.text.Editable;
@@ -37,6 +38,7 @@ import com.aequinoxio.davverotvdownloader.DownloadLogic.VideoDetails;
 import com.aequinoxio.davverotvdownloader.AndroidLogic.VideoDetailsParcelable;
 import com.aequinoxio.davverotvdownloader.DownloadLogic.VideoUrlAndQuality;
 import com.aequinoxio.davverotvdownloader.DownloadLogic.WorkerUpdateCallback;
+import com.google.android.material.snackbar.BaseTransientBottomBar;
 import com.google.android.material.snackbar.Snackbar;
 
 import java.io.BufferedWriter;
@@ -60,11 +62,11 @@ import static com.google.android.material.snackbar.BaseTransientBottomBar.LENGTH
 public class MainActivity extends AppCompatActivity {
 
     private static final String READDETAILSFROMBUNDLE = "READDETAILSFROMBUNDLE";
-    private static final int SCHEDULE_PERIOD = 1000; // IN MILLIS
+    private static final int SCHEDULE_PERIOD = 500; // IN MILLIS
     private VideoDetailsParcelable videoDetailsParcelable;
     boolean spinnerInitialization = true;
-    private long downloadManagerID;
-    private final int PERMISSION_REQ_CODE = 1234987; // Valore casuale per l'applicazione
+    private long downloadManagerID;                 // Handle del servizio di sistema per il download via HTTP
+    private final int PERMISSION_REQ_CODE = 12987; // Valore casuale per l'applicazione
     private boolean PERMISSION_WRITE_GRANTED;
     private BroadcastReceiver downloadReceiver;
     private TimerTask timerTask;
@@ -74,17 +76,26 @@ public class MainActivity extends AppCompatActivity {
     // Permission check
     // Thanx to: https://stackoverflow.com/a/40514787
     public boolean haveStoragePermission() {
-        if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                == PackageManager.PERMISSION_GRANTED) {
-            //Log.e("Permission error","You have permission");
-            PERMISSION_WRITE_GRANTED = true;
+        if (Build.VERSION.SDK_INT >= 29) { // Con Android Q non serve in quanto uso il Download manager integrato di Android
+            PERMISSION_WRITE_GRANTED=true;
 
         } else {
 
-            // Log.e("Permission error","You have asked for permission");
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, PERMISSION_REQ_CODE);
-            PERMISSION_WRITE_GRANTED = false; // TODO: FORSE è un errore
+            if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    == PackageManager.PERMISSION_GRANTED) {
+                //Log.e("Permission error","You have permission");
+                PERMISSION_WRITE_GRANTED = true;
 
+            } else {
+
+                // Log.e("Permission error","You have asked for permission");
+                ActivityCompat.requestPermissions(this, new String[]{
+                        Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                        Manifest.permission.READ_EXTERNAL_STORAGE
+                }, PERMISSION_REQ_CODE);
+                PERMISSION_WRITE_GRANTED = false; // TODO: FORSE è un errore
+
+            }
         }
         return PERMISSION_WRITE_GRANTED;
     }
@@ -221,7 +232,12 @@ public class MainActivity extends AppCompatActivity {
             String videoQuality;
             String videoTitle;
 
-            if (!PERMISSION_WRITE_GRANTED) {
+//            if (!PERMISSION_WRITE_GRANTED) {
+//                return;
+//            }
+
+            if(!haveStoragePermission()){
+                Snackbar.make(v,"Permessi non assegnati", LENGTH_LONG).show();
                 return;
             }
 
@@ -229,6 +245,7 @@ public class MainActivity extends AppCompatActivity {
             if (spinner.getSelectedItem() == null) {
                 return;
             }
+
             videoUrl = ((VideoUrlAndQuality) (spinner.getSelectedItem())).getVideoUrl();
             videoQuality = ((VideoUrlAndQuality) (spinner.getSelectedItem())).getQuality();
             videoTitle = videoDetailsParcelable.getTitle();
@@ -254,14 +271,26 @@ public class MainActivity extends AppCompatActivity {
             progressBar.setMax(100);
 
             // Scrivo il file di ausilio .title con le informazioni sull'origine del video
-            try(BufferedWriter bw = new BufferedWriter(new FileWriter(
-                    new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)+"/"+videoTitle+".title")))
-            ){
-                bw.write("Titolo:");bw.write(videoTitle);bw.newLine();
-                bw.write("Url:");bw.write(videoDetailsParcelable.getMainUrl());bw.newLine();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            String titleFileAbsPath=Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)+
+                    "/"+videoTitle+".title";
+            ((TextView) findViewById(R.id.txtLogView)).append("Salvo il file in: "+titleFileAbsPath+"\n");
+
+            // TODO: Sostituire con Scoped Storage
+//            try(BufferedWriter bw = new BufferedWriter(new FileWriter(titleFileAbsPath))
+//            ){
+//                bw.write("Titolo:");bw.write(videoTitle);bw.newLine();
+//                bw.write("Url:");bw.write(videoDetailsParcelable.getMainUrl());bw.newLine();
+//
+//                // DEBUG
+//                //Snackbar.make(v,titleFileAbsPath, BaseTransientBottomBar.LENGTH_INDEFINITE).show();
+//
+//                /////////
+//            } catch (IOException e) {
+//                ((TextView) findViewById(R.id.txtLogView)).append("*** Errore "+
+//                e.toString()+" ***\n");
+//                e.printStackTrace();
+//                //Snackbar.make(v,"*** ERRORE Creazione file .title ***\n"+e.toString(), LENGTH_LONG).show();
+//            }
 
             // Avvio il download
             timer.cancel(); // Per sicurezza
