@@ -1,10 +1,7 @@
 package com.aequinoxio.davverotvdownloader;
 
-import androidx.annotation.NonNull;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
-
 import android.Manifest;
+import android.app.Activity;
 import android.app.DownloadManager;
 import android.content.BroadcastReceiver;
 import android.content.ClipData;
@@ -19,9 +16,11 @@ import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.ParcelFileDescriptor;
 import android.text.Editable;
 import android.text.TextWatcher;
-import android.view.KeyEvent;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -32,23 +31,22 @@ import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.TextView;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+
+import com.aequinoxio.davverotvdownloader.AndroidLogic.VideoDetailsParcelable;
 import com.aequinoxio.davverotvdownloader.DownloadLogic.ParseVideoPage;
 import com.aequinoxio.davverotvdownloader.DownloadLogic.UpdateEvent;
 import com.aequinoxio.davverotvdownloader.DownloadLogic.VideoDetails;
-import com.aequinoxio.davverotvdownloader.AndroidLogic.VideoDetailsParcelable;
 import com.aequinoxio.davverotvdownloader.DownloadLogic.VideoUrlAndQuality;
 import com.aequinoxio.davverotvdownloader.DownloadLogic.WorkerUpdateCallback;
-import com.google.android.material.snackbar.BaseTransientBottomBar;
 import com.google.android.material.snackbar.Snackbar;
 
 import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.FileWriter;
-import java.io.FilterOutputStream;
-import java.io.IOException;
-import java.io.OutputStreamWriter;
 import java.net.URL;
 import java.util.List;
 import java.util.Locale;
@@ -63,6 +61,7 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String READDETAILSFROMBUNDLE = "READDETAILSFROMBUNDLE";
     private static final int SCHEDULE_PERIOD = 500; // IN MILLIS
+    private static final int WRITE_REQ = 321;
     private VideoDetailsParcelable videoDetailsParcelable;
     boolean spinnerInitialization = true;
     private long downloadManagerID;                 // Handle del servizio di sistema per il download via HTTP
@@ -77,7 +76,7 @@ public class MainActivity extends AppCompatActivity {
     // Thanx to: https://stackoverflow.com/a/40514787
     public boolean haveStoragePermission() {
         if (Build.VERSION.SDK_INT >= 29) { // Con Android Q non serve in quanto uso il Download manager integrato di Android
-            PERMISSION_WRITE_GRANTED=true;
+            PERMISSION_WRITE_GRANTED = true;
 
         } else {
 
@@ -93,8 +92,8 @@ public class MainActivity extends AppCompatActivity {
                         Manifest.permission.WRITE_EXTERNAL_STORAGE,
                         Manifest.permission.READ_EXTERNAL_STORAGE
                 }, PERMISSION_REQ_CODE);
-                PERMISSION_WRITE_GRANTED = false; // TODO: FORSE è un errore
 
+                PERMISSION_WRITE_GRANTED = false; // TODO: FORSE è un errore
             }
         }
         return PERMISSION_WRITE_GRANTED;
@@ -112,6 +111,20 @@ public class MainActivity extends AppCompatActivity {
 
     ///////////////////////////////////////////////////////////////////////////
 
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.main, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+//        return super.onOptionsItemSelected(item);
+        if (item.getItemId()==R.id.sample_url){
+            ((EditText) findViewById(R.id.editTextTextUrl)).setText(getString(R.string.UrlEsempio));
+        }
+        return true;
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -123,22 +136,17 @@ public class MainActivity extends AppCompatActivity {
         if (savedInstanceState != null) {
             VideoDetailsParcelable videoDetailsParcelable = savedInstanceState.getParcelable(READDETAILSFROMBUNDLE);
             populateTree(videoDetailsParcelable);
-            //((TextView)findViewById(R.id.txtLogView)).setText("");
         }
-
-        //// DEBUG
-        //((EditText) findViewById(R.id.editTextTextUrl)).setText("https://www.davvero.tv/tgbyoblu24/videos/tg-byoblu24-26-febbraio-2021-edizione-19-00");
-        ////
 
         Button button = findViewById(R.id.btnStart);
 
         Button finalButton = button;
         button.setOnClickListener(v -> {
 
-            String urlText = ((EditText)findViewById(R.id.editTextTextUrl)).getText().toString();
+            String urlText = ((EditText) findViewById(R.id.editTextTextUrl)).getText().toString();
 
-            if (!httpUrlIsValid(urlText)){
-                Snackbar.make(this,v,"Immettere un'url valida", LENGTH_LONG).show();
+            if (!httpUrlIsValid(urlText)) {
+                Snackbar.make(this, v, getString(R.string.valid_url_request), LENGTH_LONG).show();
                 return;
             }
 
@@ -151,14 +159,8 @@ public class MainActivity extends AppCompatActivity {
 
 
             finalButton.setEnabled(false);
-            findViewById(R.id.btnEsempio).setEnabled(false);
 
             ((TextView) findViewById(R.id.txtLogView)).setText("");
-        });
-
-        button = findViewById(R.id.btnEsempio);
-        button.setOnClickListener(v -> {
-            ((EditText)findViewById(R.id.editTextTextUrl)).setText(getString(R.string.UrlEsempio));
         });
 
         Spinner spinner = findViewById(R.id.spinner);
@@ -199,9 +201,9 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void afterTextChanged(Editable s) {
-                if (s.length()>0 && httpUrlIsValid(s.toString())){
+                if (s.length() > 0 && httpUrlIsValid(s.toString())) {
                     findViewById(R.id.btnStart).setEnabled(true);
-                } else{
+                } else {
                     findViewById(R.id.btnStart).setEnabled(false);
                 }
             }
@@ -232,12 +234,8 @@ public class MainActivity extends AppCompatActivity {
             String videoQuality;
             String videoTitle;
 
-//            if (!PERMISSION_WRITE_GRANTED) {
-//                return;
-//            }
-
-            if(!haveStoragePermission()){
-                Snackbar.make(v,"Permessi non assegnati", LENGTH_LONG).show();
+            if (!haveStoragePermission()) {
+                Snackbar.make(v, "Permessi non assegnati", LENGTH_LONG).show();
                 return;
             }
 
@@ -270,27 +268,18 @@ public class MainActivity extends AppCompatActivity {
             progressBar.setMin(0);
             progressBar.setMax(100);
 
-            // Scrivo il file di ausilio .title con le informazioni sull'origine del video
-            String titleFileAbsPath=Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)+
-                    "/"+videoTitle+".title";
-            ((TextView) findViewById(R.id.txtLogView)).append("Salvo il file in: "+titleFileAbsPath+"\n");
-
-            // TODO: Sostituire con Scoped Storage
-//            try(BufferedWriter bw = new BufferedWriter(new FileWriter(titleFileAbsPath))
-//            ){
-//                bw.write("Titolo:");bw.write(videoTitle);bw.newLine();
-//                bw.write("Url:");bw.write(videoDetailsParcelable.getMainUrl());bw.newLine();
+//            // Scrivo il file di ausilio .title con le informazioni sull'origine del video
+//            String titleFileAbsPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) +
+//                    "/" + videoTitle + ".title";
+//            ((TextView) findViewById(R.id.txtLogView)).append("Salvo il file in: " + titleFileAbsPath + "\n");
 //
-//                // DEBUG
-//                //Snackbar.make(v,titleFileAbsPath, BaseTransientBottomBar.LENGTH_INDEFINITE).show();
+//            // TODO: Sostituire con Scoped Storage
+//            Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+//            intent.addCategory(Intent.CATEGORY_OPENABLE);
+//            intent.setType("text/plain");
+//            intent.putExtra(Intent.EXTRA_TITLE, videoTitle + ".title");
 //
-//                /////////
-//            } catch (IOException e) {
-//                ((TextView) findViewById(R.id.txtLogView)).append("*** Errore "+
-//                e.toString()+" ***\n");
-//                e.printStackTrace();
-//                //Snackbar.make(v,"*** ERRORE Creazione file .title ***\n"+e.toString(), LENGTH_LONG).show();
-//            }
+//            startActivityForResult(intent, WRITE_REQ);
 
             // Avvio il download
             timer.cancel(); // Per sicurezza
@@ -298,7 +287,7 @@ public class MainActivity extends AppCompatActivity {
             timerTask = new TimerTask() {
                 long latestPrintedDownload = 0;
                 final ProgressBar pb = findViewById(R.id.progressBar);
-                final TextView textViewLog=findViewById(R.id.txtLogView);
+                final TextView textViewLog = findViewById(R.id.txtLogView);
 
                 @Override
                 public void run() {
@@ -311,7 +300,7 @@ public class MainActivity extends AppCompatActivity {
                         int bytes_total = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
                         double progresso = 100.0F * ((bytes_downloaded * 1.0F) / (double) bytes_total);
 
-                        if (bytes_total<=0){
+                        if (bytes_total <= 0) {
                             pb.setIndeterminate(true);
                         } else {
                             pb.setIndeterminate(false);
@@ -320,7 +309,7 @@ public class MainActivity extends AppCompatActivity {
                                 latestPrintedDownload = bytes_downloaded;
                                 runOnUiThread(() -> {
                                     pb.setProgress((int) progresso);
-                                    textViewLog.append(String.format(Locale.getDefault(),"Scaricati %d di %d bytes - %d %%\n", bytes_downloaded, bytes_total, (int) progresso));
+                                    textViewLog.append(String.format(Locale.getDefault(), "Scaricati %d di %d bytes - %d %%\n", bytes_downloaded, bytes_total, (int) progresso));
                                 });
                             }
                         }
@@ -328,7 +317,7 @@ public class MainActivity extends AppCompatActivity {
                 }
             };
 
-            timer.schedule(timerTask,0,SCHEDULE_PERIOD);
+            timer.schedule(timerTask, 0, SCHEDULE_PERIOD);
 
         });
 
@@ -337,7 +326,7 @@ public class MainActivity extends AppCompatActivity {
             public void onReceive(Context context, Intent intent) {
                 String action = intent.getAction();
 
-              //  System.out.println("*** action:"+action);
+                //  System.out.println("*** action:"+action);
                 if (!DownloadManager.ACTION_DOWNLOAD_COMPLETE.equals(action)) {
                     return;
                 }
@@ -346,17 +335,19 @@ public class MainActivity extends AppCompatActivity {
                     return;
                 }
 
-              //  System.out.println("*** action 2:"+action);
+                //  System.out.println("*** action 2:"+action);
 
                 DownloadManager.Query query = new DownloadManager.Query();
                 query.setFilterById(downloadManagerID);
                 Cursor cursor = ((DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE)).query(query);
-                String messaggio = "";
+
+                String messaggio ;
+
                 if (cursor.moveToFirst()) {
                     int status = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_STATUS));
                     switch (status) {
                         case DownloadManager.STATUS_SUCCESSFUL:
-                            messaggio="Download completato\n";
+                            messaggio = "Download completato\n";
                             break;
                         case DownloadManager.STATUS_FAILED:
                             messaggio = "Download in errore\n";
@@ -373,7 +364,7 @@ public class MainActivity extends AppCompatActivity {
                 timer.cancel();
                 String finalMessaggio = messaggio;
                 runOnUiThread(() -> {
-                 //   System.out.println("*** on runuithread:");
+                    //   System.out.println("*** on runuithread:");
                     ((TextView) findViewById(R.id.txtLogView)).append(finalMessaggio);
                     findViewById(R.id.progressBarCircular).setVisibility(View.INVISIBLE);
                     findViewById(R.id.progressBar).setVisibility(View.INVISIBLE);
@@ -392,12 +383,54 @@ public class MainActivity extends AppCompatActivity {
         String urlRegex = "^(http|https)://[-a-zA-Z0-9+&@#/%?=~_|,!:.;]*[-a-zA-Z0-9+@#/%=&_|]";
         Pattern pattern = Pattern.compile(urlRegex);
         Matcher m = pattern.matcher(urlText);
-        if (m.matches()) {
-            return true;
-        } else {
-            return false;
+        return m.matches();
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (resultCode == Activity.RESULT_OK) {
+            if (requestCode == WRITE_REQ) {
+
+                if (data != null) {
+                    Uri uri;
+                    uri = data.getData();
+
+                    try {
+                        ParcelFileDescriptor fileDescriptor = this.getContentResolver().openFileDescriptor(uri, "w");
+                        BufferedWriter bw = new BufferedWriter(new FileWriter(fileDescriptor.getFileDescriptor()));
+                        bw.write("Titolo:");
+                        bw.write(videoDetailsParcelable.getTitle());
+                        bw.newLine();
+                        bw.write("Url:");
+                        bw.write(videoDetailsParcelable.getMainUrl());
+                        bw.newLine();
+
+//                    FileOutputStream fileOutputStream =
+//                            new FileOutputStream(fileDescriptor.getFileDescriptor());
+//
+//                    fileOutputStream.write(("Titolo:").getBytes());
+//                    fileOutputStream.write(videoTitle.getBytes());
+//                    fileOutputStream.write("\n".getBytes());
+//
+//                    fileOutputStream.write(("Url:").getBytes());
+//                    fileOutputStream.write(mainUrl.getBytes());
+//                    fileOutputStream.write("\n".getBytes());
+//
+//                    fileOutputStream.close();
+                        bw.close();
+                        fileDescriptor.close();
+
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
         }
     }
+
+    @RequiresApi(api = Build.VERSION_CODES.KITKAT)
+
 
     @Override
     protected void onSaveInstanceState(@NonNull Bundle outState) {
@@ -428,7 +461,6 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.btnCopy).setEnabled(true);
         findViewById(R.id.btnDownloadVideo).setEnabled(true);
         findViewById(R.id.btnStart).setEnabled(true);
-        findViewById(R.id.btnEsempio).setEnabled(true);
 
         videoDetailsParcelable = videoDetails;
     }
@@ -524,7 +556,5 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.btnDownloadVideo).setEnabled(false);
 
         findViewById(R.id.btnStart).setEnabled(true);
-        findViewById(R.id.btnEsempio).setEnabled(true);
-
     }
 }

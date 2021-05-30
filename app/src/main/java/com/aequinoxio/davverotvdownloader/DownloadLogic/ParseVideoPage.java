@@ -16,7 +16,7 @@ public class ParseVideoPage {
     private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:86.0) Gecko/20100101 Firefox/86.0" ;
 
     final WorkerUpdateCallback workerUpdateCallback;
-    private static String Indent="\t\t\t";
+    private static final String Indent="\t\t\t";
 
     public ParseVideoPage(WorkerUpdateCallback workerUpdateCallback) {
         this.workerUpdateCallback = workerUpdateCallback;

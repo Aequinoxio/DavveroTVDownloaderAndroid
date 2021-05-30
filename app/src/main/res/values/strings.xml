@@ -10,4 +10,5 @@
     <string name="HelpUrl">Es: https://www.davvero.tv/tgbyoblu24/videos/tg-byoblu24-26-febbraio-2021-edizione-19-00</string>
     <string name="UrlEsempio">https://www.davvero.tv/tgbyoblu24/videos/tg-byoblu24-26-febbraio-2021-edizione-19-00</string>
     <string name="VediEsempio">Url esempio</string>
+    <string name="valid_url_request">Immettere un\'url valida</string>
 </resources>
